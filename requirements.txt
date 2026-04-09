@@ -1,0 +1,9 @@
+pyhive
+thrift
+pure-sasl
+thrift_sasl
+pandas
+openpyxl
+xlrd
+fastapi
+uvicorn

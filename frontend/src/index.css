@@ -1,0 +1,202 @@
+:root {
+  --primary-glow: conic-gradient(
+    from 180deg at 50% 50%,
+    #2a8af6 0deg,
+    #a853ba 180deg,
+    #e92a67 360deg
+  );
+  --background-dark: #0f172a;
+  --glass-bg: rgba(30, 41, 59, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --accent: #38bdf8;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--background-dark);
+  color: var(--text-primary);
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Dynamic animated background mesh */
+body::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.15) 0%, rgba(15, 23, 42, 0) 50%),
+              radial-gradient(circle at 80% 20%, rgba(233, 42, 103, 0.15) 0%, rgba(15, 23, 42, 0) 40%);
+  z-index: -1;
+  animation: bg-shift 20s ease-in-out infinite alternate;
+}
+
+@keyframes bg-shift {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  100% { transform: translate(-5%, 5%) rotate(5deg); }
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-panel:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  transition: all 0.3s ease;
+}
+
+/* App Layout */
+.app-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.title-glow {
+  font-size: 2.5rem;
+  font-weight: 800;
+  background: linear-gradient(to right, #38bdf8, #e92a67);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0;
+}
+
+/* Filter controls */
+.filters-container {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-group label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+select {
+  background: rgba(15, 23, 42, 0.8);
+  color: white;
+  border: 1px solid var(--glass-border);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  min-width: 150px;
+}
+
+select:focus {
+  border-color: var(--accent);
+}
+
+select:hover {
+  background: rgba(30, 41, 59, 0.9);
+}
+
+/* Dashboard Grid Component */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+@media (min-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.chart-card {
+  padding: 1.5rem;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-card.full-width {
+  grid-column: 1 / -1;
+}
+
+.chart-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.chart-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Loading state */
+.loader-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  width: 100%;
+}
+
+.loader {
+  border: 3px solid var(--glass-border);
+  border-top: 3px solid var(--accent);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Sub-metrics styling */
+.chart-content {
+  flex-grow: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+}

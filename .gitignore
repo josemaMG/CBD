@@ -1,0 +1,4 @@
+.venv
+volcado_temporal.tsv
+backend/__pycache__
+frontend/node_modules
