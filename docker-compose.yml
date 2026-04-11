@@ -4,6 +4,9 @@ services:
     container_name: mi_hive
     environment:
       - SERVICE_NAME=hiveserver2
+      - HADOOP_CLIENT_OPTS=-Xmx2G
+      - SERVICE_OPTS=-Xmx2G
+    mem_limit: 3g
     ports:
       - "10000:10000"
       - "10002:10002"
