@@ -655,21 +655,23 @@ function App() {
             </Card>
           )}
 
-          <Card title="Beneficios según Mes y Año" icon={TrendingDown} fullWidth>
-            {profitTrendChartData.length === 0 ? (
-              <p style={{ margin: 0, color: '#94a3b8' }}>No hay datos de beneficio para el filtro seleccionado.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={320}>
-                <LineChart data={profitTrendChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="period" stroke="#94a3b8" />
-                  <YAxis stroke="#94a3b8" tickFormatter={val => `$${val/1000}k`} />
-                  <RechartsTooltip content={<CustomTooltip />} />
-                  <Line type="monotone" dataKey="total_profit" name="Beneficio Total" stroke="#4ade80" strokeWidth={3} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </Card>
+          {!(selectedYear && selectedMonth) && (
+            <Card title="Beneficios según Mes y Año" icon={TrendingDown} fullWidth>
+              {profitTrendChartData.length === 0 ? (
+                <p style={{ margin: 0, color: '#94a3b8' }}>No hay datos de beneficio para el filtro seleccionado.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={320}>
+                  <LineChart data={profitTrendChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis dataKey="period" stroke="#94a3b8" />
+                    <YAxis stroke="#94a3b8" tickFormatter={val => `$${val/1000}k`} />
+                    <RechartsTooltip content={<CustomTooltip />} />
+                    <Line type="monotone" dataKey="total_profit" name="Beneficio Total" stroke="#4ade80" strokeWidth={3} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </Card>
+          )}
 
           {/* 2. Product Categories */}
           <Card title="Rendimiento por Subcategorías" icon={ShoppingCart}>
