@@ -48,6 +48,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def sql_escape(value: str) -> str:
+    return str(value).replace("'", "''")
+
 def build_date_filter(year: Optional[str] = None, month: Optional[str] = None, region: Optional[str] = None):
     conditions = []
 
@@ -56,7 +60,8 @@ def build_date_filter(year: Optional[str] = None, month: Optional[str] = None, r
     if month:
         conditions.append(f"CAST(split(regexp_replace(order_date, '/', '-'), '-')[1] AS INT) = {month}")
     if region:
-        conditions.append(f"region = '{region}'")
+        safe_region = sql_escape(region)
+        conditions.append(f"region = '{safe_region}'")
         
     return " AND ".join(conditions) if conditions else "1=1"
 
@@ -138,11 +143,14 @@ def get_category_sales_rm(
     if date_filter != "1=1":
         conditions.append(date_filter)
     if region:
-        conditions.append(f"region = '{region}'")
+        safe_region = sql_escape(region)
+        conditions.append(f"region = '{safe_region}'")
     if market:
-        conditions.append(f"market = '{market}'")
+        safe_market = sql_escape(market)
+        conditions.append(f"lower(trim(market)) = lower(trim('{safe_market}'))")
     if category:
-        conditions.append(f"category = '{category}'")
+        safe_category = sql_escape(category)
+        conditions.append(f"category = '{safe_category}'")
 
     filter_clause = " AND ".join(conditions) if conditions else "1=1"
     query = f"""
@@ -429,7 +437,8 @@ def get_custom_analysis(
 
     conditions = [date_filter]
     if category:
-        conditions.append(f"category = '{category}'")
+        safe_category = sql_escape(category)
+        conditions.append(f"category = '{safe_category}'")
 
     where_clause = " AND ".join(conditions)
 

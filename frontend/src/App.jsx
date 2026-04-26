@@ -63,6 +63,8 @@ function App() {
   // Region & Market Custom Filter State
   const [filterMarket, setFilterMarket] = useState('');
   const [categoryRmData, setCategoryRmData] = useState([]);
+  const [categoryRmLoading, setCategoryRmLoading] = useState(false);
+  const [categoryRmError, setCategoryRmError] = useState(null);
 
   // Custom Analysis State
   const [customCategory, setCustomCategory] = useState('');
@@ -283,30 +285,51 @@ function App() {
     }
   };
 
-  const handleFetchCategoryRM = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (selectedYear) params.set('year', selectedYear);
-      if (selectedMonth) params.set('month', selectedMonth);
-      if (selectedRegion) params.set('region', selectedRegion);
-      if (filterMarket) params.set('market', filterMarket);
-
-      const query = params.toString() ? `?${params.toString()}` : '?';
-
-      const res = await fetch(`${API_BASE}/kpi/category_sales_rm${query}`);
-      const data = await res.json();
-      const sortedCategoryRmData = Array.isArray(data)
-        ? [...data].sort((a, b) => Number(b.total_sales) - Number(a.total_sales))
-        : [];
-      setCategoryRmData(sortedCategoryRmData);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // Fetch initial generic data for the new chart
   useEffect(() => {
-    handleFetchCategoryRM();
+    const controller = new AbortController();
+
+    const fetchCategoryRM = async () => {
+      setCategoryRmLoading(true);
+      setCategoryRmError(null);
+
+      try {
+        const params = new URLSearchParams();
+        if (selectedYear) params.set('year', selectedYear);
+        if (selectedMonth) params.set('month', selectedMonth);
+        if (selectedRegion) params.set('region', selectedRegion);
+        if (filterMarket) params.set('market', filterMarket.trim());
+
+        const query = params.toString() ? `?${params.toString()}` : '?';
+        const res = await fetch(`${API_BASE}/kpi/category_sales_rm${query}`, { signal: controller.signal });
+
+        if (!res.ok) {
+          throw new Error(`Error ${res.status} al cargar ventas por mercado`);
+        }
+
+        const data = await res.json();
+        if (controller.signal.aborted) return;
+
+        const sortedCategoryRmData = Array.isArray(data)
+          ? [...data].sort((a, b) => Number(b.total_sales) - Number(a.total_sales))
+          : [];
+        setCategoryRmData(sortedCategoryRmData);
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.error(err);
+        setCategoryRmError('No se pudieron cargar las ventas por mercado.');
+        setCategoryRmData([]);
+      } finally {
+        if (!controller.signal.aborted) {
+          setCategoryRmLoading(false);
+        }
+      }
+    };
+
+    fetchCategoryRM();
+
+    return () => {
+      controller.abort();
+    };
   }, [selectedYear, selectedMonth, selectedRegion, filterMarket]);
 
   useEffect(() => {
@@ -500,11 +523,16 @@ function App() {
   const availableMarkets = useMemo(() => {
     const uniqueMarkets = new Set(
       regionData
-        .map(item => item.market)
+        .map(item => String(item.market || '').trim())
         .filter(market => market && market !== 'NULL')
     );
     return [...uniqueMarkets].sort((a, b) => String(a).localeCompare(String(b), 'es'));
   }, [regionData]);
+
+  const categoryRmTotalSales = useMemo(
+    () => categoryRmData.reduce((acc, row) => acc + (Number(row.total_sales) || 0), 0),
+    [categoryRmData],
+  );
 
   const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   const profitTrendChartData = useMemo(() => {
@@ -817,11 +845,27 @@ function App() {
                     ))}
                   </select>
                 </div>
+                  <span style={{ color: '#9fc0de', fontSize: '0.9rem' }}>
+                    Mercado actual: {filterMarket || 'Todos'}
+                  </span>
+                  <span style={{ color: '#9fc0de', fontSize: '0.9rem' }}>
+                    Ventas totales: {formatCurrency(categoryRmTotalSales)}
+                  </span>
               </div>
             </div>
+
+              {categoryRmLoading && (
+                <p style={{ margin: '0 0 1rem 0', color: '#94a3b8' }}>Actualizando gráfico por mercado...</p>
+              )}
+              {categoryRmError && (
+                <p style={{ margin: '0 0 1rem 0', color: '#ef4444' }}>{categoryRmError}</p>
+              )}
+              {!categoryRmLoading && !categoryRmError && categoryRmData.length === 0 && (
+                <p style={{ margin: '0 0 1rem 0', color: '#94a3b8' }}>No hay datos para el mercado seleccionado.</p>
+              )}
             
             <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={categoryRmData}>
+                <BarChart data={categoryRmData} key={`market-${filterMarket || 'all'}-${selectedYear || 'all'}-${selectedMonth || 'all'}-${selectedRegion || 'all'}`}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                 <XAxis dataKey="sub_category" stroke="#94a3b8" angle={-35} textAnchor="end" interval={0} height={80} tick={{ fontSize: 11 }} />
                 <YAxis stroke="#94a3b8" tickFormatter={val => `$${val/1000}k`} />
