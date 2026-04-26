@@ -19,6 +19,43 @@ Dentro de los binarios del proyecto (o tu descarga original) necesitas tener el 
    ```
 3. Espera al menos uno o dos minutos tras crear el contenedor. Apache Hive y su MetaStore son sistemas muy pesados y tardan un par de minutos en arrancar por completo para admitir conexiones.
 
+#### Solución del error de inicialización de Hive (importante)
+
+Si en los logs aparece un mensaje como:
+
+```bash
+HiveServer2 running as process X. Stop it first.
+```
+
+no significa necesariamente que Hive esté roto de forma permanente. Suele ocurrir porque el contenedor fue reiniciado mientras aún estaba inicializando el esquema interno de metastore (Derby). Durante ese proceso, el script de arranque intenta levantar HiveServer2 y detecta un proceso/PID previo en curso, entrando en un arranque conflictivo.
+
+También es normal ver advertencias de `SLF4J: Class path contains multiple bindings`; son warnings de logging y no la causa principal del fallo.
+
+Para recuperarlo de forma limpia:
+
+```bash
+docker compose down --remove-orphans
+docker rm -f mi_hive
+docker compose up -d --force-recreate
+docker compose logs -f hiveserver2
+```
+
+Espera a ver en logs estas trazas antes de continuar:
+
+```bash
+Initialization script completed
+Initialized schema successfully..
+Starting HiveServer2
+```
+
+Luego valida la conexión con:
+
+```bash
+python PruebaDeConexion.py
+```
+
+Si responde con la base `default`, Hive ya quedó operativo.
+
 ### 3. Crear Entorno Virtual e Instalar Dependencias
 Para poder lanzar los scripts de Python y el Backend, necesitas primero preparar el entorno:
 1. Abre tu terminal (PowerShell por defecto) en la raíz de este proyecto (la carpeta `CBD`).
@@ -72,26 +109,65 @@ Para levantar el servidor web con la interfaz gráfica de usuario en React:
 
 ## 📊 Diccionario de Métricas y KPIs
 
-El Dashboard incluye múltiples gráficas y exportaciones de datos (Excel/PDF) que ayudan a evaluar el rendimiento del negocio. A continuación se detalla qué representa cada una de las métricas principales estructuradas por su sección en el panel:
+El Dashboard incluye múltiples gráficas y exportaciones de datos (Excel/PDF) que ayudan a evaluar el rendimiento del negocio. A continuación se detalla qué representa cada métrica por sección.
 
-#### 🌍 1. Ventas y Beneficios por Región
-- **Ventas Totales (Sales):** Ingreso bruto monetario total generado en la zona geográfica agrupada (mostrado en USD `$`).
-- **Beneficio Total (Profit):** Ganancia o pérdida neta real obtenida en la área tras descontar costes (los números rojos indican pérdidas).
+### Panel Principal
 
-#### 🛒 2. Rendimiento por Categoría
-- **Ventas Totales:** Ingresos brutos generados por cada sub-categoría de producto.
-- *(En exportación Excel)* **Beneficio Total:** Ganancia neta extraída explícitamente de esa categoría de producto.
-- *(En exportación Excel)* **Artículos Vendidos (Quantity):** Suma total de unidades físicas de la categoría que fueron vendidas y procesadas.
+#### 🌍 1. Ventas Totales por Región
+- **Ventas Totales (Sales):** Ingreso bruto monetario total generado en la zona geográfica agrupada (USD).
+- **Beneficio Total (Profit):** Ganancia o pérdida neta obtenida en cada zona.
 
-#### 📉 3. Descuento vs Beneficio
-- **Descuento Aplicado (Discount %):** Rebaja media porcentual concedida sobre los precios en ese grupo de compras.
-- **Beneficio Promedio (AVG Profit):** Nivel de margen de ganancia media unitaria que arroja un pedido estándar dentro de esa banda de descuento.
-- *(En exportación Excel)* **Número de Pedidos (Order Count):** Cantidad de tickets de reserva independientes con dicho nivel de descuento.
+#### 📈 2. Beneficios según Mes y Año
+- **Beneficio Total Mensual:** Suma de beneficio por combinación Año-Mes.
+- **Limpieza de fecha aplicada:** Se excluyen registros con año inválido (año 0 o menor a 2000) y con mes fuera del rango 1-12.
 
-#### 🚚 4. Modos de Envío
-- **Frecuencia de Envío (Frequency):** Número de veces que se ha seleccionado o empleado un método de envío logístico (Ej. Standard Class, Same Day) y su porcentaje del mix total.
-- *(En exportación Excel)* **Coste de Envío Promedio (AVG Shipping Cost):** Tarifa media aplicada de sobrecoste o asumida al usar esta logística.
+#### 🛒 3. Rendimiento por Subcategorías
+- **Ventas Totales por Subcategoría:** Ingresos brutos por subcategoría de producto.
+- **Beneficio Total (en exportación):** Ganancia neta agregada por categoría/subcategoría.
+- **Artículos Vendidos (Quantity):** Suma de unidades vendidas.
 
-#### 👥 5. Ingresos por Segmento
-- **Total Ingresos Generados:** Lo que han facturado los diferentes perfiles (Consumer, Corporate...).
-- *(En exportación Excel)* **Recuento de Clientes (Únicos):** Contador de identidades (`customer_id`) distintas en ese nicho. Esto filtra de clientes recurrentes para saber exactamente a cuántas cabezas diferentes hemos vendido.
+#### 📉 4. Descuento vs Beneficio
+- **Descuento Aplicado (Discount %):** Rebaja media porcentual concedida sobre los precios.
+- **Beneficio Promedio (AVG Profit):** Margen de ganancia media por nivel de descuento.
+- **Normalización de tramos:** Cada punto representa un porcentaje de descuento consolidado (sin duplicados para el mismo %).
+- **Tooltip contextual:** Al pasar el ratón se muestra el texto `Descuento de: [porcentaje aplicado]`.
+- **Número de Pedidos (en exportación):** Cantidad de tickets en ese nivel de descuento.
+
+#### 🚚 5. Modos de Envío
+- **Frecuencia de Envío (Frequency):** Uso total de cada método logístico y su peso relativo.
+- **Coste de Envío Promedio (AVG Shipping Cost):** Coste medio por modo de envío.
+
+#### 👥 6. Ingresos por Segmento
+- **Total Ingresos Generados:** Facturación total por tipo de cliente (Consumer, Corporate, Home Office).
+- **Recuento de Clientes (Únicos):** Número de clientes distintos por segmento.
+
+#### 🌐 7. Ventas de Subcategorías por Mercado
+- **Ventas Totales por Subcategoría y Mercado:** Ranking de ventas según mercado seleccionado.
+- **Filtro de Mercado:** Permite aislar rendimiento por cada market sin perder los filtros globales de año/mes/región.
+
+#### 🔎 8. Mejores Categorías por Beneficio Total (Top 10)
+- **Top 10 por Beneficio Total:** Muestra como mínimo los 10 mejores resultados ordenados por beneficio total.
+- **Granularidad:** Ranking por categoría y subcategoría.
+- **Métricas incluidas:** Ventas Totales, Cantidad y Beneficio Total.
+
+### Insights Avanzados
+
+#### ⚠️ 9. Fugas de Rentabilidad
+- **Objetivo:** Detectar productos con ventas altas pero beneficio negativo.
+- **Métricas:** Ventas Totales, Beneficio Total y Descuento Promedio.
+
+#### ⏱️ 10. Eficiencia Logística (Time-to-Ship)
+- **Días Promedio de Envío:** Tiempo medio entre pedido y envío por prioridad.
+- **Coste de Envío Promedio:** Relación entre velocidad logística y coste.
+
+#### 👑 11. Pareto de Clientes (Top 15)
+- **Ventas Totales por Cliente:** Identifica clientes con mayor aportación de ingresos.
+- **Segmentación visual:** Colores por tipo de segmento.
+
+#### 📆 12. Estacionalidad de Ventas (MoM)
+- **Comparativa mensual por año:** Evolución de ventas mes a mes por cada año disponible.
+- **Uso recomendado:** Detectar patrones estacionales y meses críticos.
+
+#### 🌍 13. Geoespacial de Márgenes (Riesgo por País/Mercado)
+- **Margen de Beneficio (%):** Señala países/mercados con menor rentabilidad.
+- **Aplicación:** Priorización de acciones comerciales y logísticas en zonas de riesgo.

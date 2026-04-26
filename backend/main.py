@@ -314,18 +314,22 @@ def get_profit_trend(year: Optional[str] = None, month: Optional[str] = None):
     # Profit trend driven by global year/month selectors.
     date_filter = build_date_filter(year, month)
     profit_expr = build_safe_double_expr("profit")
+    order_ts_expr = build_safe_unix_ts_expr("order_date")
     query = f"""
         SELECT
-            CAST(split(regexp_replace(order_date, '/', '-'), '-')[2] AS INT) as year,
-            CAST(split(regexp_replace(order_date, '/', '-'), '-')[1] AS INT) as month,
+            CAST(from_unixtime({order_ts_expr}, 'yyyy') AS INT) as year,
+            CAST(from_unixtime({order_ts_expr}, 'M') AS INT) as month,
             ROUND(SUM(COALESCE({profit_expr}, 0)), 2) as total_profit
         FROM superstore
         WHERE {date_filter}
           AND order_date IS NOT NULL
           AND order_date != 'NULL'
+          AND {order_ts_expr} IS NOT NULL
+          AND CAST(from_unixtime({order_ts_expr}, 'yyyy') AS INT) >= 2000
+          AND CAST(from_unixtime({order_ts_expr}, 'M') AS INT) BETWEEN 1 AND 12
         GROUP BY
-            CAST(split(regexp_replace(order_date, '/', '-'), '-')[2] AS INT),
-            CAST(split(regexp_replace(order_date, '/', '-'), '-')[1] AS INT)
+            CAST(from_unixtime({order_ts_expr}, 'yyyy') AS INT),
+            CAST(from_unixtime({order_ts_expr}, 'M') AS INT)
         ORDER BY year ASC, month ASC
     """
     return fetch_data_as_dict(query)
@@ -352,18 +356,28 @@ def get_category_performance(year: Optional[str] = None, month: Optional[str] = 
 def get_discount_impact(year: Optional[str] = None, month: Optional[str] = None, region: Optional[str] = None):
     # How do discounts impact profitability?
     date_filter = build_date_filter(year, month, region)
-    # Agrupamos los descuentos en "tramos" o mostramos por cada valor de descuento único
+    discount_expr = build_safe_double_expr("discount")
+    profit_expr = build_safe_double_expr("profit")
+    sales_expr = build_safe_double_expr("sales")
+    # Normalizamos descuento a porcentaje entero para evitar puntos con el mismo % visible y distinto promedio.
     query = f"""
-        SELECT 
-            discount,
-            AVG(profit) as avg_profit,
-            SUM(profit) as total_profit,
-            SUM(CAST(sales AS DOUBLE)) as total_sales,
+        SELECT
+            discount_pct / 100.0 as discount,
+            ROUND(AVG(profit_value), 2) as avg_profit,
+            ROUND(SUM(profit_value), 2) as total_profit,
+            ROUND(SUM(sales_value), 2) as total_sales,
             COUNT(*) as order_count
-        FROM superstore
-        WHERE {date_filter} AND discount IS NOT NULL
-        GROUP BY discount
-        ORDER BY discount ASC
+        FROM (
+            SELECT
+                CAST(ROUND(COALESCE({discount_expr}, 0) * 100) AS INT) as discount_pct,
+                COALESCE({profit_expr}, 0) as profit_value,
+                COALESCE({sales_expr}, 0) as sales_value
+            FROM superstore
+            WHERE {date_filter}
+              AND discount IS NOT NULL
+        ) normalized_discounts
+        GROUP BY discount_pct
+        ORDER BY discount_pct ASC
     """
     return fetch_data_as_dict(query)
 
@@ -406,8 +420,9 @@ def get_custom_analysis(
     category: Optional[str] = None,
     year: Optional[str] = None,
     month: Optional[str] = None,
+    limit: int = Query(default=10, ge=10, le=50),
 ):
-    # Top sales grouped by category, aligned with global filters.
+    # Top categories/sub-categories ordered by total profit, aligned with global filters.
     date_filter = build_date_filter(year, month, region)
     sales_expr = build_safe_double_expr("sales")
     profit_expr = build_safe_double_expr("profit")
@@ -421,6 +436,7 @@ def get_custom_analysis(
     query = f"""
         SELECT
             category as Categoria,
+            sub_category as Subcategoria,
             ROUND(SUM(COALESCE({sales_expr}, 0)), 2) as Ventas_Totales,
             SUM(quantity) as Cantidad_Total,
             ROUND(SUM(COALESCE({profit_expr}, 0)), 2) as Beneficio_Total
@@ -428,9 +444,11 @@ def get_custom_analysis(
         WHERE {where_clause}
           AND category IS NOT NULL
           AND category != 'NULL'
-        GROUP BY category
-        ORDER BY Ventas_Totales DESC, Beneficio_Total DESC
-        LIMIT 20
+          AND sub_category IS NOT NULL
+          AND sub_category != 'NULL'
+        GROUP BY category, sub_category
+        ORDER BY Beneficio_Total DESC, Ventas_Totales DESC
+        LIMIT {limit}
     """
     return fetch_data_as_dict(query)
 

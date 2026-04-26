@@ -10,6 +10,7 @@ import * as XLSX from 'xlsx';
 import './index.css';
 
 const API_BASE = 'http://localhost:8000/api';
+const TOP_SALES_LIMIT = 10;
 
 const COLORS = ['#38bdf8', '#e92a67', '#a853ba', '#2a8af6', '#fcd34d', '#4ade80'];
 
@@ -118,10 +119,17 @@ function App() {
           ? [...profitRes]
               .map(item => ({
                 ...item,
-                year: Number(item.year) || 0,
-                month: Number(item.month) || 0,
+                year: Number(item.year),
+                month: Number(item.month),
                 total_profit: Number(item.total_profit) || 0,
               }))
+              .filter(item => (
+                Number.isInteger(item.year) &&
+                Number.isInteger(item.month) &&
+                item.year >= 2000 &&
+                item.month >= 1 &&
+                item.month <= 12
+              ))
               .sort((a, b) => (a.year - b.year) || (a.month - b.month))
           : [];
 
@@ -252,6 +260,7 @@ function App() {
       if (selectedRegion) params.set('region', selectedRegion);
       if (selectedYear) params.set('year', selectedYear);
       if (selectedMonth) params.set('month', selectedMonth);
+      params.set('limit', String(TOP_SALES_LIMIT));
       const normalizedCategory = (categoryFilter || '').trim();
       if (normalizedCategory) params.set('category', normalizedCategory);
       const query = params.toString() ? `?${params.toString()}` : '?';
@@ -262,8 +271,8 @@ function App() {
       const sortedCustomData = Array.isArray(data)
         ? [...data].sort(
             (a, b) =>
-              (Number(b.ventas_totales) - Number(a.ventas_totales)) ||
-              (Number(b.beneficio_total) - Number(a.beneficio_total))
+              (Number(b.beneficio_total) - Number(a.beneficio_total)) ||
+              (Number(b.ventas_totales) - Number(a.ventas_totales))
           )
         : [];
       setCustomData(sortedCustomData);
@@ -305,13 +314,22 @@ function App() {
     handleCustomAnalysis(customCategory);
   }, [selectedYear, selectedMonth, selectedRegion, customCategory, activeTab]);
 
-  const formatCurrency = (value) => `$${value.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const formatCurrency = (value) => {
+    const safeValue = Number(value) || 0;
+    return `$${safeValue.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  };
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       const hasBeneficioPromedio = payload.some(entry => entry.name === 'Beneficio Promedio');
+      const discountValue = payload[0]?.payload?.discount ?? label;
+      const discountNumber = Number(discountValue);
+      const hasDiscountLabel = !Number.isNaN(discountNumber);
       return (
         <div className="glass-panel" style={{ padding: '10px', fontSize: '0.9rem' }}>
+          {hasBeneficioPromedio && hasDiscountLabel && (
+            <p style={{ margin: '0 0 10px 0', fontWeight: 'bold' }}>Descuento de: {(discountNumber * 100).toFixed(0)}%</p>
+          )}
           {!hasBeneficioPromedio && (
             <p style={{ margin: '0 0 10px 0', fontWeight: 'bold', textTransform: 'capitalize' }}>{label}</p>
           )}
@@ -429,7 +447,45 @@ function App() {
     XLSX.writeFile(workbook, `Superstore_Export_${safeDateStr}.xlsx`);
   };
 
-  const validProfits = discountData.filter(i => i.avg_profit !== null && i.avg_profit !== undefined).map(i => Number(i.avg_profit)).filter(n => !isNaN(n));
+  const discountChartData = useMemo(() => {
+    const groupedByPct = new Map();
+
+    (Array.isArray(discountData) ? discountData : []).forEach((item) => {
+      const discountPct = Math.round((Number(item.discount) || 0) * 100);
+      const orderCount = Number(item.order_count) || 0;
+      const avgProfit = Number(item.avg_profit) || 0;
+      const totalProfit = Number(item.total_profit) || 0;
+      const totalSales = Number(item.total_sales) || 0;
+
+      if (!groupedByPct.has(discountPct)) {
+        groupedByPct.set(discountPct, {
+          discountPct,
+          order_count: 0,
+          total_profit: 0,
+          total_sales: 0,
+          weighted_avg_profit_sum: 0,
+        });
+      }
+
+      const bucket = groupedByPct.get(discountPct);
+      bucket.order_count += orderCount;
+      bucket.total_profit += totalProfit;
+      bucket.total_sales += totalSales;
+      bucket.weighted_avg_profit_sum += avgProfit * orderCount;
+    });
+
+    return [...groupedByPct.values()]
+      .map((bucket) => ({
+        discount: bucket.discountPct / 100,
+        order_count: bucket.order_count,
+        total_profit: bucket.total_profit,
+        total_sales: bucket.total_sales,
+        avg_profit: bucket.order_count > 0 ? (bucket.weighted_avg_profit_sum / bucket.order_count) : 0,
+      }))
+      .sort((a, b) => a.discount - b.discount);
+  }, [discountData]);
+
+  const validProfits = discountChartData.filter(i => i.avg_profit !== null && i.avg_profit !== undefined).map(i => Number(i.avg_profit)).filter(n => !isNaN(n));
   const maxProfit = validProfits.length ? Math.max(...validProfits) : 0;
   const minProfit = validProfits.length ? Math.min(...validProfits) : 0;
   const gradientOffset = (maxProfit > 0 && minProfit < 0) ? (maxProfit / (maxProfit - minProfit)) : (maxProfit <= 0 ? 1 : 0);
@@ -689,7 +745,7 @@ function App() {
           {/* 3. Discount Impact */}
           <Card title="Descuento vs Beneficio" icon={TrendingDown}>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={discountData}>
+              <LineChart data={discountChartData}>
                 <defs>
                   <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#4ade80" />
@@ -888,7 +944,7 @@ function App() {
 
       {!loading && activeTab === 'principal' && (
       <div style={{ padding: '0 20px 20px 20px' }}>
-        <Card title="Mejores Ventas por Categoría" icon={Search} fullWidth>
+        <Card title="Mejores Categorías por Beneficio Total" icon={Search} fullWidth>
           <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem', alignItems: 'flex-end' }}>
              <div className="filter-group">
                 <label>Categoría</label>
@@ -903,6 +959,7 @@ function App() {
                   ))}
                 </select>
              </div>
+              <span style={{ color: '#9fc0de', fontSize: '0.9rem' }}>Mostrando Top {TOP_SALES_LIMIT} por beneficio total</span>
                {customLoading && (
                 <span style={{ color: '#9fc0de', fontSize: '0.9rem' }}>Actualizando resultados...</span>
                )}
@@ -912,10 +969,11 @@ function App() {
 
           {customData && (
              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '600px' }}>
+               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '760px' }}>
                    <thead>
                       <tr style={{ background: 'rgba(255,255,255,0.1)', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
                          <th style={{ padding: '10px' }}>Categoría</th>
+                     <th style={{ padding: '10px' }}>Subcategoría</th>
                          <th style={{ padding: '10px' }}>Ventas Totales</th>
                          <th style={{ padding: '10px' }}>Cantidad</th>
                          <th style={{ padding: '10px' }}>Beneficio Total</th>
@@ -923,14 +981,15 @@ function App() {
                    </thead>
                    <tbody>
                       {customData.length === 0 ? (
-                      <tr><td colSpan="4" style={{ padding: '10px', textAlign: 'center' }}>No se encontraron resultados</td></tr>
+                   <tr><td colSpan="5" style={{ padding: '10px', textAlign: 'center' }}>No se encontraron resultados</td></tr>
                       ) : (
                         customData.map((row, idx) => (
-                           <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <tr key={`${row.categoria || 'sin-categoria'}-${row.subcategoria || 'sin-subcategoria'}-${idx}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                               <td style={{ padding: '10px' }}>{row.categoria || '-'}</td>
+                        <td style={{ padding: '10px' }}>{row.subcategoria || '-'}</td>
                               <td style={{ padding: '10px' }}>{formatCurrency(row.ventas_totales)}</td>
                               <td style={{ padding: '10px' }}>{row.cantidad_total}</td>
-                              <td style={{ padding: '10px', color: row.beneficio_total >= 0 ? '#4ade80' : '#ef4444' }}>
+                        <td style={{ padding: '10px', color: Number(row.beneficio_total) >= 0 ? '#4ade80' : '#ef4444' }}>
                                 {formatCurrency(row.beneficio_total)}
                               </td>
                            </tr>
