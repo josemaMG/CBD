@@ -123,15 +123,10 @@ El Dashboard incluye múltiples gráficas y exportaciones de datos (Excel/PDF) q
 
 #### 🛒 3. Rendimiento por Subcategorías
 - **Ventas Totales por Subcategoría:** Ingresos brutos por subcategoría de producto.
-- **Beneficio Total (en exportación):** Ganancia neta agregada por categoría/subcategoría.
-- **Artículos Vendidos (Quantity):** Suma de unidades vendidas.
 
 #### 📉 4. Descuento vs Beneficio
 - **Descuento Aplicado (Discount %):** Rebaja media porcentual concedida sobre los precios.
 - **Beneficio Promedio (AVG Profit):** Margen de ganancia media por nivel de descuento.
-- **Normalización de tramos:** Cada punto representa un porcentaje de descuento consolidado (sin duplicados para el mismo %).
-- **Tooltip contextual:** Al pasar el ratón se muestra el texto `Descuento de: [porcentaje aplicado]`.
-- **Número de Pedidos (en exportación):** Cantidad de tickets en ese nivel de descuento.
 
 #### 🚚 5. Modos de Envío
 - **Frecuencia de Envío (Frequency):** Uso total de cada método logístico y su peso relativo.
